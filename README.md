@@ -97,24 +97,6 @@ El sistema simula un microondas funcional con las siguientes características:
 
 ---
 
-## 🕹️ Flujo del Programa
-
-flowchart TD
-A[Inicio] --> B[Mostrar reloj en display y "00:00" en LCD]
-B --> C[Lectura del keypad]
-C -->|A-D| D[Platillo predefinido]
-C -->|0–9| E[Entrada manual de tiempo]
-C -->|*| F[Iniciar cocción]
-C -->|#| G[Cancelar / Resetear]
-F --> H[Activar motor y cuenta regresiva]
-H --> I[Mostrar "Calentando..." en LCD]
-I --> J[Tiempo llega a 0]
-J --> K[Mostrar "Listo!" y detener motor]
-G --> B
-K --> B
-
----
-
 ### 🔬 Consideraciones Adicionales
 
 Los displays de 7 segmentos son de cátodo común, controlados por transistores 2N2222A.
