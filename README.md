@@ -111,4 +111,4 @@ El motor paso a paso requiere fuente de 5V (la directa del nucleo funciona).
 👉 https://youtu.be/uB3EOVek4Uc
 
 🔹 Explicación completa del código:
-👉 https://youtu.be/DeG0cI-FKdo
+👉 https://youtu.be/a8kjqn-QtWI
