@@ -10,40 +10,13 @@
 #define GPIOC_BASE            (IOPORT_BASE + 0x0800)
 
 typedef struct {
-    volatile uint32_t MODER;    // Offset 0x00
-    volatile uint32_t OTYPER;   // Offset 0x04
-    volatile uint32_t OSPEEDR;  // Offset 0x08
-    volatile uint32_t PUPDR;    // Offset 0x0C
-    volatile uint32_t IDR;      // Offset 0x10
-    volatile uint32_t ODR;      // Offset 0x14
-    volatile uint32_t BSRR;     // Offset 0x18
-    volatile uint32_t LCKR;     // Offset 0x1C
-    volatile uint32_t AFR[2];   // Offset 0x20-0x24
+    volatile uint32_t MODER, OTYPER, OSPEEDR, PUPDR, IDR, ODR, BSRR, LCKR, AFR[2], BRR;
 } GPIO_TypeDef;
 
 typedef struct {
-    volatile uint32_t CR;       // Offset 0x00
-    volatile uint32_t ICSCR;    // Offset 0x04
-    volatile uint32_t CFGR;     // Offset 0x08
-    volatile uint32_t PLLCFGR;  // Offset 0x0C
-    volatile uint32_t PLLSAI1CFGR; // Offset 0x10
-    volatile uint32_t CIER;     // Offset 0x14
-    volatile uint32_t CIFR;     // Offset 0x18
-    volatile uint32_t CICR;     // Offset 0x1C
-    volatile uint32_t IOPRSTR;  // Offset 0x20
-    volatile uint32_t AHBRSTR;  // Offset 0x24
-    volatile uint32_t APB2RSTR; // Offset 0x28
-    volatile uint32_t APB1RSTR; // Offset 0x2C
-    volatile uint32_t IOPENR;   // Offset 0x30
-    volatile uint32_t AHBENR;   // Offset 0x34
-    volatile uint32_t APB2ENR;  // Offset 0x38
-    volatile uint32_t APB1ENR;  // Offset 0x3C
-    volatile uint32_t IOPSMENR; // Offset 0x40
-    volatile uint32_t AHBSMENR; // Offset 0x44
-    volatile uint32_t APB2SMENR;// Offset 0x48
-    volatile uint32_t APB1SMENR;// Offset 0x4C
-    volatile uint32_t CCIPR;    // Offset 0x50
-    volatile uint32_t CSR;      // Offset 0x54
+    volatile uint32_t CR, ICSCR, CRRCR, CFGR, CIER, CIFR, CICR, IOPRSTR,
+                      AHBRSTR, APB2RSTR, APB1RSTR, IOPENR, AHBENR, APB2ENR,
+                      APB1ENR, IOPSMENR, AHBSMENR, APB2SMENR, APB1SMENR, CCIPR, CSR;
 } RCC_TypeDef;
 
 #define GPIOA ((GPIO_TypeDef *) GPIOA_BASE)
@@ -51,84 +24,101 @@ typedef struct {
 #define GPIOC ((GPIO_TypeDef *) GPIOC_BASE)
 #define RCC   ((RCC_TypeDef *) RCC_BASE)
 
-// Declaracion de direcciones de memoria
-
-// -x-x-x-x- Funciones Generales -x-x-x-x-
+// === Función de delay ===
 void timer_loop(int32_t ticks){
-    for(int32_t  t = 0; t < ticks; t++) {
-        for(int32_t  t = 0; t < 140; t++) {
+    for(int32_t t = 0; t < ticks; t++) {
+        for(int32_t i = 0; i < 15; i++) { // 140
             __asm__ __volatile__ ("nop");
         }
     }
 }
 
-uint8_t display_digits[10] = {
-    0b00111111, // 0
-    0b00000110, // 1
-    0b01011011, // 2
-    0b01001111, // 3
-    0b01100110, // 4
-    0b01101101, // 5
-    0b01111101, // 6
-    0b00000111, // 7
-    0b01111111, // 8
-    0b01101111 // 9
-};
+// -x-x-x-x- Funciones 7-seg -x-x-x-x-
+
+const uint8_t nums[10] = {
+        0b00111111, // 0
+        0b00000110, // 1
+        0b01011011, // 2
+        0b01001111, // 3
+        0b01100110, // 4
+        0b01101101, // 5
+        0b01111101, // 6
+        0b00000111, // 7
+        0b01111111, // 8
+        0b01101111  // 9
+    };
+
+uint16_t display_digits(uint8_t numero){
+
+    // 7-seg: leds = A,B (PA0-PA1), C,D (PA11-PA12), E,F,G(PA4-PA6), displays = PA7-PA10
+    uint8_t pattern = nums[numero];
+    uint16_t mask = 0b0000000000000; // Inicializa el mask en 0
+
+    if(pattern & (1<<0)) mask |= (1<<0);   // A → PA0
+    if(pattern & (1<<1)) mask |= (1<<1);   // B → PA1
+    if(pattern & (1<<2)) mask |= (1<<11);  // C → PA11
+    if(pattern & (1<<3)) mask |= (1<<12);  // D → PA12
+    if(pattern & (1<<4)) mask |= (1<<4);   // E → PA4
+    if(pattern & (1<<5)) mask |= (1<<5);   // F → PA5
+    if(pattern & (1<<6)) mask |= (1<<6);   // G → PA6
+
+    return mask;
+}
 
 // -x-x-x-x- Funciones Keypad -x-x-x-x-
 int16_t keypad_read() {
     GPIOC->ODR |= (0x0F << 0);  // reset
 
     GPIOC->ODR &= ~(1 << 0);
-    timer_loop(8);
+    timer_loop(4);
     if        ((GPIOC-> IDR & (1 << 4)) == 0) {
-        return 1; 
+        return 1;
     } else if ((GPIOC-> IDR & (1 << 5)) == 0) {
-        return 4; 
+        return 4;
     } else if ((GPIOC-> IDR & (1 << 6)) == 0) {
-        return 7; 
+        return 7;
     } else if ((GPIOC-> IDR & (1 << 7)) == 0) {
-        return '*'; 
+        return '*';
     }
-    
-    
+
+
     GPIOC->ODR |= (0x0F << 0);  // reset
     GPIOC->ODR &= ~(1 << 1);
-    timer_loop(8);
+    timer_loop(4);
     if        ((GPIOC-> IDR & (1 << 4)) == 0) {
-        return 2; 
+        return 2;
     } else if ((GPIOC-> IDR & (1 << 5)) == 0) {
-        return 5; 
+        return 5;
     } else if ((GPIOC-> IDR & (1 << 6)) == 0) {
-        return 8; 
+        return 8;
     } else if ((GPIOC-> IDR & (1 << 7)) == 0) {
-        return 0; 
+        return 0;
     }
 
     GPIOC->ODR |= (0x0F << 0);  // reset
     GPIOC->ODR &= ~(1 << 2);
-    timer_loop(8);
+    timer_loop(4);
     if        ((GPIOC-> IDR & (1 << 4)) == 0) {
-        return 3; 
+        return 3;
     } else if ((GPIOC-> IDR & (1 << 5)) == 0) {
-        return 6; 
+        return 6;
     } else if ((GPIOC-> IDR & (1 << 6)) == 0) {
-        return 9; 
+        return 9;
     } else if ((GPIOC-> IDR & (1 << 7)) == 0) {
-        return '#'; 
+        return '#';
     }
 
     GPIOC->ODR |= (0x0F << 0);  // reset
     GPIOC->ODR &= ~(1 << 3);
-    timer_loop(8);
+    timer_loop(4);
     if        ((GPIOC-> IDR & (1 << 4)) == 0) {
         return 'A';
     } else if ((GPIOC-> IDR & (1 << 5)) == 0) {
         return 'B';
     } else if ((GPIOC-> IDR & (1 << 6)) == 0) {
-        return 'C'; 
+        return 'C';
     } else if ((GPIOC-> IDR & (1 << 7)) == 0) {
-        return 'D'; 
+        return 'D';
     }
 
     return -1; // Si no hay tecla
@@ -136,6 +126,7 @@ int16_t keypad_read() {
 
 int read_key(void){
     int k1 = keypad_read();
+    if (k1 == -1) return -1;
     timer_loop(20);     // ~50 ms
     int k2 = keypad_read();
     if(k1 == k2) return k1;
@@ -216,41 +207,42 @@ void lcd_cmd(uint8_t cmd){
 
     lcd_send_nibble(alto);
     lcd_send_nibble(bajo);
-    timer_loop(8); 
+    timer_loop(8);
 }
 
-// Motor pines PA 11-14
+// Motor pines PB6-9
 void activacion_motor_stepper(uint8_t* fsm_motor_ptr) {
-    GPIOA->BSRR = (0x0F << (16+11)); // Apagar
+    GPIOB->BSRR |= (0x0F << (6+16)); // Apagar PB6–PB9
     switch(*fsm_motor_ptr) {
         case 1:
-            GPIOA->BSRR = (0b0001 << 11); // Activar bobina 1
+            GPIOB->BSRR |= (0b0001 << 6); // Activar bobina 1
             *fsm_motor_ptr = 2;
             break;
         case 2:
-            GPIOA->BSRR = (0b0010 << 11); // Activar bobina 2
+            GPIOB->BSRR |= (0b0010 << 6); // Activar bobina 2
             *fsm_motor_ptr = 3;
             break;
         case 3:
-            GPIOA->BSRR = (0b0100 << 11); // Activar bobina 3
+            GPIOB->BSRR |= (0b0100 << 6); // Activar bobina 3
             *fsm_motor_ptr = 4;
             break;
         case 4:
-            GPIOA->BSRR = (0b1000 << 11); // Activar bobina 4
+            GPIOB->BSRR |= (0b1000 << 6); // Activar bobina 4
             *fsm_motor_ptr = 1;
             break;
         default:
-            GPIOA->BSRR = (0b0001 << 11); // Activar bobina 1
+            GPIOB->BSRR |= (0b0001 << 6); // Activar bobina 1
             *fsm_motor_ptr = 2;
             break;
     }
 }
 
+
 // -x-x-x-x- Definicion de pines -x-x-x-x-
 
-// 7-seg: leds = PA0-6, displays = PA7-PA10
-// Motor: IN1-IN4 = PA11–PA14
+// 7-seg: leds = A,B (PA0-PA1), C,D (PA11-PA12), E,F,G(PA4-PA6), displays = PA7-PA10
 // LCD: D4-D7 = PB0-3, E = PB4, RS = PB5
+// Motor: IN1-IN4 = PB6–PB9
 // Keypad: PC0-PC3 columnas, PC4-PC7 filas
 
 // -x-x-x-x- Main -x-x-x-x-
@@ -260,25 +252,34 @@ int main() {
     // inicializacion de los perifericos y pines
     RCC->IOPENR |= 0b111; // Habilita reloj GPIOA, GPIOB, GPIOC
 
-    // 7-seg: leds = PA0-6, displays = PA7-PA10  (sin punto decimal)
-    GPIOA->MODER &= ~(0b1111111111111111111111<<0);
-    GPIOA->MODER |=  (0b0101010101010101010101<<0); // salida = 01 por cada par de bits
+    // 7-seg: leds = PA0-PA1, PA11-PA12, PA4-PA6, displays = PA7-PA10  (sin punto decimal)
+    GPIOA->MODER &= ~(0b1111<<0); // PA0-PA1
+    GPIOA->MODER |=  (0b0101<<0); // A, B
 
-    // Motor: IN1-IN4 = PA11–PA14
-    GPIOA->MODER &= ~(0b11111111 << (11*2));   // limpiar PB11–PB14
-    GPIOA->MODER |=  (0b01010101 << (11*2));   // salida = 01 por cada par de bits
+    GPIOA->MODER &= ~(0b1111<<22); // PA11-PA12
+    GPIOA->MODER |=  (0b0101<<22); // C, D
+
+    GPIOA->MODER &= ~(0b111111<<8); // PA4-PA6
+    GPIOA->MODER |=  (0b010101<<8); // E, F, G
+
+    GPIOA->MODER &= ~(0b11111111<<14); // PA7-PA10
+    GPIOA->MODER |=  (0b01010101<<14); // displays
 
     // LCD: D4-D7 = PB0-3, E = PB4, RS = PB5
-    GPIOB->MODER &= ~(0b111111111111<<0); // 00 bits en PB0..PB5
-    GPIOB->MODER |=  (0b010101010101<<0); // 01 PB0..PB5 output
+    GPIOB->MODER &= ~(0b111111111111<<0); // PB0-PB5
+    GPIOB->MODER |=  (0b010101010101<<0); // output
+
+    // Motor: IN1-IN4 = PB6–PB9
+    GPIOB->MODER &= ~(0b11111111 << 12); // PB6-PB9
+    GPIOB->MODER |=  (0b01010101 << 12); // output
 
     // Keypad: PC0-PC3 columnas (salida high), PC4-PC7 filas (entrada pull-up)
     GPIOC->MODER &= ~(0b1111111111111111<<0);
     // columnas
-    GPIOC->MODER |=  (0b01010101<<0);
+    GPIOC->MODER |=  (0b01010101<<0); // output (solo columnas)
     GPIOC->BSRR  |=  (0b1111<<0);
     // filas
-    GPIOC->PUPDR &= ~(11111111<<8);
+    GPIOC->PUPDR &= ~(0b11111111<<8);
     GPIOC->PUPDR |=  (0b01010101<<8);
 
     // Otras variables
@@ -290,10 +291,13 @@ int main() {
     uint8_t microwave_time[4] = {0, 0, 0, 0}; // tiempo display del microondas MM:SS
     uint8_t clock_time[4] = {0, 0, 0, 0}; // tiempo display del reloj HH:MM
     uint8_t display_time[4] = {0, 0, 0, 0}; // tiempo a mostrar en el display
+    uint16_t display_mask = 0; // para controlar los pines de los digitos del display
     uint16_t display_delay = 0; // para controlar la frecuencia de cada digito del display
     uint32_t microwave_counter = 0; // contador para el tiempo del microondas
     uint32_t clock_counter = 0; // contador para el tiempo del reloj
     uint8_t hu_max = 9; // Máximo del digito de unidades de hora
+    const uint32_t second_counter = 80; // 1 segundo
+    const uint32_t minute_counter = 60 * second_counter; // 1 minuto
 
     // Variables para mensajes en LCD
     char mensaje_tiempo[6] = "00:00"; // mensaje a mostrar en el display
@@ -305,7 +309,8 @@ int main() {
     char mensaje6[] = "Listo!";
     char mensaje7[] = "Calentando...";
     uint8_t display_fsm = 0; // fsm para el display
-    uint8_t microwave_running = 0; // estado del microondas
+    uint8_t microwave_typing_state = 0; // ingresando numeros
+    uint8_t microwave_running_state = 0; // calentando
 
     lcd_init();
 
@@ -313,9 +318,16 @@ int main() {
 
         key = read_key(); // boton presionado
 
+        if (key != last_key) {
+            last_key = key;
+        } else {
+            key = -1; // si es igual, no es un nuevo boton
+        }
+
         if (key != -1 && (key >= 0 && key <= 9)) {
         lcd_cmd(0x01); // limpiar
         move_microwave_time(microwave_time, key); // actualizar tiempo del microondas
+        microwave_typing_state = 1; // estado de ingresando numeros
         }
 
         switch (key)
@@ -375,6 +387,8 @@ int main() {
             microwave_time[1] = 0;
             microwave_time[2] = 0;
             microwave_time[3] = 0;
+            microwave_typing_state = 0;
+            microwave_running_state = 0;
             break;
         case '*':
             if (microwave_time[0] == 0 && microwave_time[1] == 0 && microwave_time[2] == 0 && microwave_time[3] == 0) {
@@ -389,24 +403,24 @@ int main() {
             // Iniciar microondas
             lcd_cmd(0x01); // limpiar
             escribir_texto_lcd(mensaje7);
-            microwave_running = 1;
+            microwave_running_state = 1;
             break;
         default:
             break;
         }
 
-        if (microwave_running == 1) {
+        if (microwave_typing_state == 1 || microwave_running_state == 1) {
             display_time[0] = microwave_time[0];
             display_time[1] = microwave_time[1];
             display_time[2] = microwave_time[2];
             display_time[3] = microwave_time[3];
-            
+
         } else {
             display_time[0] = clock_time[0];
             display_time[1] = clock_time[1];
             display_time[2] = clock_time[2];
             display_time[3] = clock_time[3];
-            
+
         }
 
         display_delay++;
@@ -414,48 +428,54 @@ int main() {
             display_delay = 0;
             switch (display_fsm)
             {
+
+                // 7-seg: leds = A,B (PA0-PA1), C,D (PA11-PA12), E,F,G(PA4-PA6), displays = PA7-PA10
                 case 0:
-                GPIOA->BSRR = (0x7FF << 16); // Reset display pines de 0 a 10
-                GPIOA->BSRR = (display_digits[display_time[0]]); // Mostrar digito 1
+                GPIOA->BSRR = (0x1FF3 << 16); // Reset display pines de 0-1, 4-10 y 11-12 es 1111111110011
+                display_mask = display_digits(display_time[0]);
+                GPIOA->BSRR = display_mask; // Mostrar digito 1
                 GPIOA->BSRR = (1 << 7); // Encender display 1
                 display_fsm++;
                 break;
                 case 1:
-                GPIOA->BSRR = (0x7FF << 16); // Reset display pines de 0 a 10
-                GPIOA->BSRR = (display_digits[display_time[1]]); // Mostrar digito 2
+                GPIOA->BSRR = (0x1FF3 << 16); // Reset pines
+                display_mask = display_digits(display_time[1]);
+                GPIOA->BSRR = display_mask; // Mostrar digito 2
                 GPIOA->BSRR = (1 << 8); // Encender display 1
                 display_fsm++;
                 break;
                 case 2:
-                GPIOA->BSRR = (0x7FF << 16); // Reset display pines de 0 a 10
-                GPIOA->BSRR = (display_digits[display_time[2]]); // Mostrar digito 3
+                GPIOA->BSRR = (0x1FF3 << 16); // Reset pines
+                display_mask = display_digits(display_time[2]);
+                GPIOA->BSRR = display_mask; // Mostrar digito 3
                 GPIOA->BSRR = (1 << 9); // Encender display 1
                 display_fsm++;
                 break;
                 case 3:
-                GPIOA->BSRR = (0x7FF << 16); // Reset display pines de 0 a 10
-                GPIOA->BSRR = (display_digits[display_time[3]]); // Mostrar digito 4
+                GPIOA->BSRR = (0x1FF3 << 16); // Reset pines
+                display_mask = display_digits(display_time[3]);
+                GPIOA->BSRR = display_mask; // Mostrar digito 4
                 GPIOA->BSRR = (1 << 10); // Encender display 1
                 display_fsm = 0;
                 break;
-                
+
                 default:
-                GPIOA->BSRR = (0x7FF << 16); // Reset display pines de 0 a 10
+                GPIOA->BSRR = (0x1FF3 << 16); // Reset pines
                 display_fsm = 0;
                 break;
             }
         }
-    
-        if(microwave_running == 1) {
+
+        if(microwave_running_state == 1) {
 
             motor_delay++;
-            if(motor_delay >= 20){ // Ajusta la velocidad del motor
+            if(motor_delay >= 5){ // Ajusta la velocidad del motor
                 motor_delay = 0;
                 activacion_motor_stepper(&fsm_motor);
             }
 
             microwave_counter++;
-            if (microwave_counter >= 383) { // 1 segundo    
+            if (microwave_counter >= second_counter) { // 1 segundo
                 microwave_counter = 0;
                 if (microwave_time[3] > 0) {
                     microwave_time[3]--;
@@ -478,8 +498,8 @@ int main() {
                                 // Tiempo terminado
                                 lcd_cmd(0x01); // limpiar
                                 escribir_texto_lcd(mensaje6);
-                                microwave_running = 0;
-
+                                microwave_running_state = 0;
+                                microwave_typing_state = 0;
                             }
                         }
                     }
@@ -488,7 +508,7 @@ int main() {
         }
 
         clock_counter++;
-            if (clock_counter >= 383) { // 1 segundo
+            if (clock_counter >= minute_counter) { // 1 minuto
                 clock_counter = 0;
                 if (clock_time[3] < 9) {
                     clock_time[3]++;
